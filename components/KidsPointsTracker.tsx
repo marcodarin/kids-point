@@ -18,37 +18,25 @@ const KidsPointsTracker = () => {
   const [pointsToAdd, setPointsToAdd] = useState('');
   const [reason, setReason] = useState('');
   
-  // Google Sheets integration 
-  const [sheetsUrl, setSheetsUrl] = useState('');
-  const [isConfigured, setIsConfigured] = useState(false);
+  // Database integration 
   const [saveStatus, setSaveStatus] = useState('idle'); // idle, saving, success, error
   const [lastError, setLastError] = useState('');
-  const [showConfig, setShowConfig] = useState(false);
 
-  // URL Google Apps Script configurato
-  const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxm6edUWClcHG7zL8KEPrHBYta8MgSuCHr43cDMx-UySOgYMfzCqUIALCA7UUxrFD2s/exec';
-
-  // Check if Google Sheets is configured on load
+  // Load data from database on startup
   useEffect(() => {
-    // Usa l'URL preconfigurato
-    setSheetsUrl(GOOGLE_SHEETS_URL);
-    setIsConfigured(true);
-    loadDataFromSheets(GOOGLE_SHEETS_URL);
+    loadDataFromDatabase();
   }, []);
 
 
 
-  const loadDataFromSheets = async (url) => {
+  const loadDataFromDatabase = async () => {
     try {
       setSaveStatus('saving');
-      const response = await fetch(url, {
-        method: 'POST',
+      const response = await fetch('/api/points', {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'load'
-        })
+        }
       });
       
       if (response.ok) {
@@ -63,24 +51,17 @@ const KidsPointsTracker = () => {
     } catch (error) {
       console.error('Errore caricamento dati:', error);
       setSaveStatus('error');
-      setLastError('Errore CORS - verifica che Google Apps Script sia configurato con "Anyone" può accedere');
+      setLastError('Errore connessione database - controlla la configurazione');
       setTimeout(() => setSaveStatus('idle'), 10000);
     }
   };
 
-  const saveToSheets = async (newPoints, newHistory) => {
-    if (!isConfigured || !sheetsUrl) {
-      setSaveStatus('error');
-      setLastError('Google Sheets non configurato');
-      setShowConfig(true);
-      return;
-    }
-    
+  const saveToDatabase = async (newPoints, newHistory) => {
     try {
       setSaveStatus('saving');
       setLastError('');
       
-      const response = await fetch(sheetsUrl, {
+      const response = await fetch('/api/points', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,8 +112,8 @@ const KidsPointsTracker = () => {
     setPoints(newPoints);
     setHistory(newHistory);
     
-    // Auto-save to Google Sheets
-    saveToSheets(newPoints, newHistory);
+    // Auto-save to Database
+    saveToDatabase(newPoints, newHistory);
   };
 
   const handleSubmit = (isPositive = true) => {
@@ -172,60 +153,7 @@ const KidsPointsTracker = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 p-4 pb-20">
       <div className="max-w-6xl mx-auto">
-        {/* Configuration Modal */}
-        {showConfig && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl p-6 max-w-2xl w-full">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">🔧 Risoluzione errore CORS</h2>
-              <div className="space-y-4">
-                <div className="bg-red-50 p-4 rounded-xl border border-red-200">
-                  <p className="text-red-800 text-sm">
-                    <strong>❌ Errore CORS rilevato</strong><br/>
-                    Il Google Apps Script non è configurato correttamente per accettare richieste esterne.
-                  </p>
-                </div>
-                
-                <div className="bg-blue-50 p-4 rounded-xl">
-                  <p className="text-sm text-blue-800">
-                    <strong>🔧 Come risolvere (1 minuto):</strong><br/>
-                    1. Vai su <a href="https://script.google.com" target="_blank" className="underline font-bold">script.google.com</a><br/>
-                    2. Apri il tuo progetto "Kids Points API"<br/>
-                    3. Clicca <strong>"Deploy" → "Manage deployments"</strong><br/>
-                    4. Clicca l'icona ✏️ (modifica) del deployment attivo<br/>
-                    5. Verifica che <strong>"Who has access" = "Anyone"</strong><br/>
-                    6. Clicca <strong>"Deploy"</strong> per aggiornare<br/>
-                    7. Ricarica questa pagina e prova di nuovo
-                  </p>
-                </div>
 
-                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                  <p className="text-yellow-800 text-sm">
-                    <strong>⚠️ Importante:</strong> Se è la prima volta che configuri lo script, 
-                    potresti dover autorizzare l'app cliccando "Advanced" → "Go to [nome progetto] (unsafe)" → "Allow"
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      // Riprova il test
-                      loadDataFromSheets(GOOGLE_SHEETS_URL);
-                    }}
-                    className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl transition-colors"
-                  >
-                    🔄 Riprova connessione
-                  </button>
-                  <button
-                    onClick={() => setShowConfig(false)}
-                    className="px-4 py-3 text-gray-600 hover:text-gray-800"
-                  >
-                    Chiudi
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Header */}
         <div className="text-center mb-8">
@@ -236,10 +164,10 @@ const KidsPointsTracker = () => {
             <div className="flex items-center gap-2 bg-white bg-opacity-20 rounded-full px-3 py-1">
               {getSaveStatusIcon()}
               <span className="text-white text-sm">
-                {saveStatus === 'saving' && 'Salvando su Google Sheets...'}
-                {saveStatus === 'success' && 'Salvato su Google Sheets!'}
-                {saveStatus === 'error' && 'Errore Google Sheets - controlla configurazione'}
-                {saveStatus === 'idle' && 'Google Sheets collegato ✅'}
+                {saveStatus === 'saving' && 'Salvando nel database...'}
+                {saveStatus === 'success' && 'Salvato nel database!'}
+                {saveStatus === 'error' && 'Errore database - controlla configurazione'}
+                {saveStatus === 'idle' && 'Database collegato ✅'}
               </span>
             </div>
           </div>
@@ -249,13 +177,13 @@ const KidsPointsTracker = () => {
           {saveStatus === 'error' && (
             <div className="mt-4 bg-red-500 bg-opacity-20 backdrop-blur rounded-2xl p-4">
               <p className="text-white text-sm mb-2">
-                ⚠️ <strong>Errore Google Sheets:</strong> {lastError}
+                ⚠️ <strong>Errore Database:</strong> {lastError}
               </p>
               <button
-                onClick={() => setShowConfig(true)}
+                onClick={() => loadDataFromDatabase()}
                 className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-full text-sm font-bold"
               >
-                🔧 Verifica configurazione
+                🔄 Riprova connessione
               </button>
             </div>
           )}
@@ -359,7 +287,7 @@ const KidsPointsTracker = () => {
               {saveStatus === 'error' && (
                 <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3">
                   <p className="text-yellow-800 text-sm text-center">
-                    ⚠️ <strong>Errore Google Sheets</strong> - verifica la configurazione
+                    ⚠️ <strong>Errore Database</strong> - verifica la configurazione
                   </p>
                 </div>
               )}
